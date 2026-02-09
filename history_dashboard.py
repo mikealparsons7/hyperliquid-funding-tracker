@@ -97,13 +97,11 @@ for i, symbol in enumerate(selected_symbols[:5]):
     symbol_recent = recent_df[recent_df["symbol"] == symbol]
     if not symbol_recent.empty:
         avg_rate = symbol_recent["funding_rate"].mean()
-        avg_rate_pct = avg_rate * 100
-        annualized = avg_rate_pct * 24 * 365
+        annualized = avg_rate * 24 * 365 * 100
         with cols[i]:
             st.metric(
                 label=symbol,
-                value=f"{avg_rate_pct:.4f}%",
-                delta=f"{annualized:.1f}% APR",
+                value=f"{annualized:.1f}% APR",
                 delta_color="normal" if avg_rate >= 0 else "inverse"
             )
 
@@ -112,17 +110,17 @@ st.subheader("Funding Rates Over Time")
 
 if not filtered_df.empty:
     chart_df = filtered_df.copy()
-    chart_df["funding_rate_pct"] = chart_df["funding_rate"] * 100
+    chart_df["funding_rate_apr"] = chart_df["funding_rate"] * 24 * 365 * 100
 
     fig_ts = px.line(
         chart_df,
         x="timestamp",
-        y="funding_rate_pct",
+        y="funding_rate_apr",
         color="symbol",
-        title="Hourly Funding Rate (%)",
+        title="Funding Rate (Annualized %)",
         labels={
             "timestamp": "Time",
-            "funding_rate_pct": "Funding Rate (%)",
+            "funding_rate_apr": "Annualized Rate (%)",
             "symbol": "Symbol"
         },
         height=HISTORY_CHART_HEIGHT
@@ -131,31 +129,35 @@ if not filtered_df.empty:
     fig_ts.update_layout(hovermode="x unified")
     st.plotly_chart(fig_ts, use_container_width=True)
 
-# ── 3. Cumulative Funding Chart ──
-st.subheader("Cumulative Funding")
-st.caption("Running sum of funding rate per symbol — total funding earned/paid holding a 1× short position.")
+# ── 3. 30-Day Trailing Average ──
+st.subheader("30-Day Trailing Average")
+st.caption("Rolling 30-day mean of hourly funding rates, annualized.")
 
 if not filtered_df.empty:
-    cum_df = filtered_df.copy()
-    cum_df["cum_funding_pct"] = (
-        cum_df.groupby("symbol")["funding_rate"].cumsum() * 100
+    avg_df = filtered_df.copy()
+    # 30 days * 24 hours = 720 hourly observations
+    avg_df["trailing_30d_apr"] = (
+        avg_df.groupby("symbol")["funding_rate"]
+        .transform(lambda x: x.rolling(window=720, min_periods=1).mean())
+        * 24 * 365 * 100
     )
 
-    fig_cum = px.line(
-        cum_df,
+    fig_avg = px.line(
+        avg_df,
         x="timestamp",
-        y="cum_funding_pct",
+        y="trailing_30d_apr",
         color="symbol",
-        title="Cumulative Funding (%)",
+        title="30-Day Trailing Average Funding Rate (Annualized %)",
         labels={
             "timestamp": "Time",
-            "cum_funding_pct": "Cumulative Funding (%)",
+            "trailing_30d_apr": "30d Avg Annualized Rate (%)",
             "symbol": "Symbol"
         },
         height=HISTORY_CHART_HEIGHT
     )
-    fig_cum.update_layout(hovermode="x unified")
-    st.plotly_chart(fig_cum, use_container_width=True)
+    fig_avg.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+    fig_avg.update_layout(hovermode="x unified")
+    st.plotly_chart(fig_avg, use_container_width=True)
 
 # ── 4. Average Rate Ranking ──
 st.subheader("Average Funding Rate Ranking")
@@ -172,7 +174,7 @@ if not ranking_df.empty:
         ranking_df.groupby("symbol")["funding_rate"]
         .mean()
         .sort_values(ascending=True)
-        * 100
+        * 24 * 365 * 100
     )
 
     # Take top 20 and bottom 20
@@ -192,8 +194,8 @@ if not ranking_df.empty:
         marker_color=bar_colors
     ))
     fig_bar.update_layout(
-        title="Mean Funding Rate (%) — Selected Date Range",
-        xaxis_title="Mean Funding Rate (%)",
+        title="Mean Funding Rate (Annualized %) — Selected Date Range",
+        xaxis_title="Mean Annualized Rate (%)",
         yaxis_title="Symbol",
         height=max(400, len(display_rates) * 22),
     )
@@ -215,7 +217,7 @@ if not filtered_df.empty:
     )
 
     if not pivot_df.empty:
-        pivot_pct = pivot_df * 100
+        pivot_pct = pivot_df * 24 * 365 * 100
 
         fig_heatmap = go.Figure(data=go.Heatmap(
             z=pivot_pct.values,
@@ -223,10 +225,10 @@ if not filtered_df.empty:
             y=pivot_pct.index.tolist(),
             colorscale="RdYlGn",
             zmid=0,
-            colorbar=dict(title="Rate (%)")
+            colorbar=dict(title="APR (%)")
         ))
         fig_heatmap.update_layout(
-            title="Daily Avg Funding Rate by Symbol",
+            title="Daily Avg Funding Rate by Symbol (Annualized)",
             height=max(300, len(pivot_pct) * 40 + 100),
             xaxis_title="Date",
             yaxis_title="Symbol"
@@ -237,10 +239,10 @@ if not filtered_df.empty:
 with st.expander("📋 Raw Data Table"):
     if not filtered_df.empty:
         display_df = filtered_df.copy()
-        display_df["funding_rate_pct"] = (display_df["funding_rate"] * 100).round(6)
+        display_df["funding_rate_apr"] = (display_df["funding_rate"] * 24 * 365 * 100).round(2)
         display_df["premium_pct"] = (display_df["premium"] * 100).round(6)
-        display_df = display_df[["timestamp", "symbol", "funding_rate_pct", "premium_pct"]]
-        display_df.columns = ["Timestamp", "Symbol", "Funding Rate (%)", "Premium (%)"]
+        display_df = display_df[["timestamp", "symbol", "funding_rate_apr", "premium_pct"]]
+        display_df.columns = ["Timestamp", "Symbol", "Annualized Rate (%)", "Premium (%)"]
 
         st.dataframe(
             display_df.sort_values("Timestamp", ascending=False),
@@ -252,4 +254,4 @@ with st.expander("📋 Raw Data Table"):
 
 # Footer
 st.divider()
-st.caption("Data from Hyperliquid API. Funding rates are hourly rates shown as percentages.")
+st.caption("Data from Hyperliquid API. All rates are annualized (hourly rate × 24 × 365).")
