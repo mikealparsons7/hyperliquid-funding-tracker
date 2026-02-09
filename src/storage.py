@@ -45,7 +45,7 @@ def load_funding_rates(days: int = None) -> pd.DataFrame:
         DataFrame with funding rate data
     """
     if not os.path.exists(FUNDING_RATES_FILE):
-        return pd.DataFrame(columns=["timestamp", "symbol", "funding_rate", "mark_price"])
+        return pd.DataFrame(columns=["timestamp", "symbol", "funding_rate", "mark_price", "day_ntl_vlm", "open_interest"])
 
     df = pd.read_csv(FUNDING_RATES_FILE)
     df["timestamp"] = pd.to_datetime(df["timestamp"])

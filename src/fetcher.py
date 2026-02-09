@@ -32,12 +32,16 @@ def fetch_funding_rates() -> List[Dict[str, Any]]:
         symbol = universe[i]["name"]
         funding_rate = float(asset_ctx.get("funding", 0))
         mark_price = float(asset_ctx.get("markPx", 0))
+        day_ntl_vlm = float(asset_ctx.get("dayNtlVlm", 0))
+        open_interest = float(asset_ctx.get("openInterest", 0))
 
         results.append({
             "timestamp": timestamp,
             "symbol": symbol,
             "funding_rate": funding_rate,
-            "mark_price": mark_price
+            "mark_price": mark_price,
+            "day_ntl_vlm": day_ntl_vlm,
+            "open_interest": open_interest
         })
 
     return results
