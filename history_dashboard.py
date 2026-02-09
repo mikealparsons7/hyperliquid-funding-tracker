@@ -28,7 +28,7 @@ st.title("📈 Funding Rate History Dashboard")
 def load_history():
     """Load the full funding history CSV."""
     df = pd.read_csv(FUNDING_HISTORY_FILE)
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    df["timestamp"] = pd.to_datetime(df["timestamp"], format="ISO8601", utc=True)
     df.sort_values(["symbol", "timestamp"], inplace=True)
     df.reset_index(drop=True, inplace=True)
     return df
