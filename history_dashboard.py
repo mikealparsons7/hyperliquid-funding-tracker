@@ -59,7 +59,7 @@ max_date = df["timestamp"].max().date()
 
 date_range = st.sidebar.date_input(
     "Date Range",
-    value=(min_date, max_date),
+    value=(max(min_date, pd.Timestamp("2024-12-31").date()), max_date),
     min_value=min_date,
     max_value=max_date
 )
