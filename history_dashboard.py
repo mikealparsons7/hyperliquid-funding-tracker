@@ -84,7 +84,72 @@ if not selected_symbols:
 
 st.caption(f"Showing data from {start_date} to {end_date} · {len(filtered_df):,} rows")
 
-# ── 1. Summary Cards ──
+# ── 1. Funding Carry Index (Rebased to 100) ──
+st.subheader("Funding Carry Index (Short + Spot Hedge)")
+st.caption("Rebased to 100 at period start. Assumes short position collecting funding, hedged with spot bought off-platform.")
+
+if not filtered_df.empty:
+    index_df = filtered_df.copy()
+
+    # Calculate compounding index per symbol: index[t] = index[t-1] * (1 + funding_rate)
+    index_df = index_df.sort_values(["symbol", "timestamp"])
+    index_df["index"] = index_df.groupby("symbol")["funding_rate"].transform(
+        lambda x: (1 + x).cumprod() * 100
+    )
+
+    # Calculate metrics for each symbol
+    metrics_data = []
+    for symbol in selected_symbols:
+        symbol_data = index_df[index_df["symbol"] == symbol]
+        if not symbol_data.empty:
+            start_idx = 100
+            end_idx = symbol_data["index"].iloc[-1]
+            gross_return = end_idx - 100
+
+            # Annualized return
+            days_in_period = (end_date - start_date).days + 1
+            if days_in_period > 0:
+                annualized_return = (pow(end_idx / 100, 365 / days_in_period) - 1) * 100
+            else:
+                annualized_return = 0
+
+            metrics_data.append({
+                "symbol": symbol,
+                "end_idx": end_idx,
+                "gross_return": gross_return,
+                "annualized_return": annualized_return
+            })
+
+    # Display metrics cards
+    if metrics_data:
+        cols = st.columns(min(len(metrics_data), 5))
+        for i, metric in enumerate(metrics_data[:5]):
+            with cols[i]:
+                st.metric(
+                    label=metric["symbol"],
+                    value=f"{metric['end_idx']:.1f}",
+                    delta=f"{metric['gross_return']:+.1f}% total | {metric['annualized_return']:+.1f}% annual"
+                )
+
+    # Chart
+    fig_index = px.line(
+        index_df,
+        x="timestamp",
+        y="index",
+        color="symbol",
+        title="Funding Carry Performance Index",
+        labels={
+            "timestamp": "Time",
+            "index": "Index (rebased to 100)",
+            "symbol": "Symbol"
+        },
+        height=HISTORY_CHART_HEIGHT
+    )
+    fig_index.add_hline(y=100, line_dash="dash", line_color="gray", opacity=0.5)
+    fig_index.update_layout(hovermode="x unified")
+    st.plotly_chart(fig_index, use_container_width=True)
+
+# ── 2. 7-Day Average Funding Rates ──
 st.subheader("7-Day Average Funding Rates")
 
 # Compute 7d average from the most recent 7 days in filtered data
@@ -105,7 +170,7 @@ for i, symbol in enumerate(selected_symbols[:5]):
                 delta_color="normal" if avg_rate >= 0 else "inverse"
             )
 
-# ── 2. Funding Rate Time Series ──
+# ── 3. Funding Rate Time Series ──
 st.subheader("Funding Rates Over Time")
 
 if not filtered_df.empty:
@@ -129,7 +194,7 @@ if not filtered_df.empty:
     fig_ts.update_layout(hovermode="x unified")
     st.plotly_chart(fig_ts, use_container_width=True)
 
-# ── 3. 30-Day Trailing Average ──
+# ── 4. 30-Day Trailing Average ──
 st.subheader("30-Day Trailing Average")
 st.caption("Rolling 30-day mean of hourly funding rates, annualized.")
 
@@ -159,7 +224,7 @@ if not filtered_df.empty:
     fig_avg.update_layout(hovermode="x unified")
     st.plotly_chart(fig_avg, use_container_width=True)
 
-# ── 4. Average Rate Ranking ──
+# ── 5. Average Rate Ranking ──
 st.subheader("Average Funding Rate Ranking")
 st.caption("Mean funding rate over the selected date range — top 20 and bottom 20.")
 
@@ -201,7 +266,7 @@ if not ranking_df.empty:
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
-# ── 5. Heatmap ──
+# ── 6. Heatmap ──
 st.subheader("Daily Funding Rate Heatmap")
 st.caption("Daily average funding rate for selected symbols.")
 
@@ -235,7 +300,7 @@ if not filtered_df.empty:
         )
         st.plotly_chart(fig_heatmap, use_container_width=True)
 
-# ── 6. Data Table ──
+# ── 7. Data Table ──
 with st.expander("📋 Raw Data Table"):
     if not filtered_df.empty:
         display_df = filtered_df.copy()
