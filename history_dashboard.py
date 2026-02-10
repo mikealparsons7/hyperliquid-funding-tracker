@@ -331,28 +331,57 @@ if not filtered_df.empty:
 
 # ── 7. Mean Funding Rate vs Volatility ──
 st.subheader("Risk-Return Profile")
-st.caption("Mean funding rate vs volatility — top-right quadrant = high carry, high volatility")
+st.caption("Mean funding rate vs volatility — selected symbols highlighted")
 
-if not filtered_df.empty:
-    # Calculate mean and volatility for symbols in the selected date range
-    stats_df = filtered_df.groupby("symbol")["funding_rate"].agg(['mean', 'std']).reset_index()
+# Calculate stats for ALL active symbols in date range
+all_symbols_df = df_active[
+    (df_active["timestamp"].dt.date >= start_date) &
+    (df_active["timestamp"].dt.date <= end_date)
+]
+
+if not all_symbols_df.empty:
+    stats_df = all_symbols_df.groupby("symbol")["funding_rate"].agg(['mean', 'std']).reset_index()
     stats_df["mean_apr"] = stats_df["mean"] * 24 * 365 * 100
     stats_df["volatility_apr"] = stats_df["std"] * 24 * 365 * 100
+    stats_df["selected"] = stats_df["symbol"].isin(selected_symbols)
 
-    fig_scatter = px.scatter(
-        stats_df,
-        x="mean_apr",
-        y="volatility_apr",
-        text="symbol",
-        title="Mean Funding Rate vs Volatility (Selected Date Range)",
-        labels={
-            "mean_apr": "Mean Annualized Funding Rate (%)",
-            "volatility_apr": "Volatility (Std Dev, Annualized %)",
-            "symbol": "Symbol"
-        },
-        height=600
+    fig_scatter = go.Figure()
+
+    # Add unselected symbols (gray, smaller)
+    unselected = stats_df[~stats_df["selected"]]
+    if not unselected.empty:
+        fig_scatter.add_trace(go.Scatter(
+            x=unselected["mean_apr"],
+            y=unselected["volatility_apr"],
+            mode="markers+text",
+            text=unselected["symbol"],
+            textposition="top center",
+            marker=dict(size=8, color="lightgray", opacity=0.5),
+            name="Not Selected",
+            showlegend=True
+        ))
+
+    # Add selected symbols (blue, larger)
+    selected_df = stats_df[stats_df["selected"]]
+    if not selected_df.empty:
+        fig_scatter.add_trace(go.Scatter(
+            x=selected_df["mean_apr"],
+            y=selected_df["volatility_apr"],
+            mode="markers+text",
+            text=selected_df["symbol"],
+            textposition="top center",
+            marker=dict(size=12, color="#1f77b4", opacity=1.0),
+            name="Selected",
+            showlegend=True
+        ))
+
+    fig_scatter.update_layout(
+        title="Mean Funding Rate vs Volatility (All Symbols, Selected Date Range)",
+        xaxis_title="Mean Annualized Funding Rate (%)",
+        yaxis_title="Volatility (Std Dev, Annualized %)",
+        height=600,
+        hovermode="closest"
     )
-    fig_scatter.update_traces(textposition="top center", marker=dict(size=10))
     fig_scatter.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.3)
     fig_scatter.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.3)
     st.plotly_chart(fig_scatter, use_container_width=True)
