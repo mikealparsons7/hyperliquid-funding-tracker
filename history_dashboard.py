@@ -324,7 +324,35 @@ if not filtered_df.empty:
         )
         st.plotly_chart(fig_heatmap, use_container_width=True)
 
-# ── 7. Data Table ──
+# ── 7. Mean Funding Rate vs Volatility ──
+st.subheader("Risk-Return Profile")
+st.caption("Mean funding rate vs volatility — top-right quadrant = high carry, high volatility")
+
+if not filtered_df.empty:
+    # Calculate mean and volatility for symbols in the selected date range
+    stats_df = filtered_df.groupby("symbol")["funding_rate"].agg(['mean', 'std']).reset_index()
+    stats_df["mean_apr"] = stats_df["mean"] * 24 * 365 * 100
+    stats_df["volatility_apr"] = stats_df["std"] * 24 * 365 * 100
+
+    fig_scatter = px.scatter(
+        stats_df,
+        x="mean_apr",
+        y="volatility_apr",
+        text="symbol",
+        title="Mean Funding Rate vs Volatility (Selected Date Range)",
+        labels={
+            "mean_apr": "Mean Annualized Funding Rate (%)",
+            "volatility_apr": "Volatility (Std Dev, Annualized %)",
+            "symbol": "Symbol"
+        },
+        height=600
+    )
+    fig_scatter.update_traces(textposition="top center", marker=dict(size=10))
+    fig_scatter.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.3)
+    fig_scatter.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.3)
+    st.plotly_chart(fig_scatter, use_container_width=True)
+
+# ── 8. Data Table ──
 with st.expander("📋 Raw Data Table"):
     if not filtered_df.empty:
         display_df = filtered_df.copy()
