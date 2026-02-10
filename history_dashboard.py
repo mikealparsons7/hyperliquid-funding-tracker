@@ -43,16 +43,41 @@ if df.empty:
 # --- Sidebar Filters ---
 st.sidebar.header("Filters")
 
-available_symbols = sorted(df["symbol"].unique().tolist())
+from src.fetcher import get_top_symbols_by_volume
+
+# Get all symbols ranked by volume (most recent open interest)
+all_symbols_by_volume = get_top_symbols_by_volume(limit=500)
+available_symbols = [s for s in all_symbols_by_volume if s in df["symbol"].unique()]
+
+# Create display labels with volume rank
+symbol_labels = []
+for i, symbol in enumerate(available_symbols, 1):
+    if i <= 15:
+        label = f"{symbol} (#{i} High Vol)"
+    elif i >= len(available_symbols) - 14:
+        label = f"{symbol} (#{i} Low Vol)"
+    else:
+        label = f"{symbol} (#{i})"
+    symbol_labels.append(label)
+
+# Map labels back to symbols
+label_to_symbol = {label: symbol for label, symbol in zip(symbol_labels, available_symbols)}
+
 default_selection = [s for s in DEFAULT_SYMBOLS if s in available_symbols]
 if not default_selection:
     default_selection = available_symbols[:5]
 
-selected_symbols = st.sidebar.multiselect(
-    "Select Symbols",
-    options=available_symbols,
-    default=default_selection[:5]
+# Create default labels
+default_labels = [label for label, symbol in label_to_symbol.items() if symbol in default_selection[:5]]
+
+selected_labels = st.sidebar.multiselect(
+    "Select Symbols (ranked by current open interest)",
+    options=symbol_labels,
+    default=default_labels
 )
+
+# Convert labels back to symbols
+selected_symbols = [label_to_symbol[label] for label in selected_labels]
 
 min_date = df["timestamp"].min().date()
 max_date = df["timestamp"].max().date()
