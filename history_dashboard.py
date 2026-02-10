@@ -43,6 +43,30 @@ if df.empty:
 # --- Sidebar Filters ---
 st.sidebar.header("Filters")
 
+# Date range picker FIRST
+min_date = df["timestamp"].min().date()
+max_date = df["timestamp"].max().date()
+
+date_range = st.sidebar.date_input(
+    "Date Range",
+    value=(max(min_date, pd.Timestamp("2024-12-31").date()), max_date),
+    min_value=min_date,
+    max_value=max_date
+)
+
+# Handle single-date selection gracefully
+if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
+    start_date, end_date = date_range
+else:
+    start_date = date_range[0] if isinstance(date_range, (list, tuple)) else date_range
+    end_date = max_date
+
+# Filter to date range FIRST
+df_date_filtered = df[
+    (df["timestamp"].dt.date >= start_date) &
+    (df["timestamp"].dt.date <= end_date)
+]
+
 # Filter out symbols with insufficient funding rate activity (< 50% non-zero)
 active_symbols = []
 for symbol in df["symbol"].unique():
@@ -51,8 +75,10 @@ for symbol in df["symbol"].unique():
     if pct_nonzero >= 0.5:  # At least 50% non-zero rates
         active_symbols.append(symbol)
 
-# Calculate historical funding rate volatility for each active symbol
-df_active = df[df["symbol"].isin(active_symbols)]
+# Filter to active symbols only
+df_active = df_date_filtered[df_date_filtered["symbol"].isin(active_symbols)]
+
+# Calculate volatility for SELECTED DATE RANGE
 volatility = df_active.groupby("symbol")["funding_rate"].std().sort_values(ascending=False)
 available_symbols = volatility.index.tolist()
 
@@ -75,7 +101,7 @@ label_to_symbol = {label: symbol for label, symbol in zip(symbol_labels, availab
 default_labels = symbol_labels
 
 selected_labels = st.sidebar.multiselect(
-    "Select Symbols (ranked by funding rate volatility)",
+    "Select Symbols (ranked by volatility in selected date range)",
     options=symbol_labels,
     default=default_labels
 )
@@ -83,29 +109,8 @@ selected_labels = st.sidebar.multiselect(
 # Convert labels back to symbols
 selected_symbols = [label_to_symbol[label] for label in selected_labels]
 
-min_date = df["timestamp"].min().date()
-max_date = df["timestamp"].max().date()
-
-date_range = st.sidebar.date_input(
-    "Date Range",
-    value=(max(min_date, pd.Timestamp("2024-12-31").date()), max_date),
-    min_value=min_date,
-    max_value=max_date
-)
-
-# Handle single-date selection gracefully
-if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
-    start_date, end_date = date_range
-else:
-    start_date = date_range[0] if isinstance(date_range, (list, tuple)) else date_range
-    end_date = max_date
-
-# Filter data (use active symbols only)
-filtered_df = df_active[
-    (df_active["symbol"].isin(selected_symbols)) &
-    (df_active["timestamp"].dt.date >= start_date) &
-    (df_active["timestamp"].dt.date <= end_date)
-]
+# Filter to selected symbols only (date range already applied)
+filtered_df = df_active[df_active["symbol"].isin(selected_symbols)]
 
 if not selected_symbols:
     st.info("Select at least one symbol from the sidebar.")
@@ -257,11 +262,8 @@ if not filtered_df.empty:
 st.subheader("Average Funding Rate Ranking")
 st.caption("Mean funding rate over the selected date range — top 20 and bottom 20.")
 
-# Use ALL active symbols in the date range (not just selected) for ranking
-ranking_df = df_active[
-    (df_active["timestamp"].dt.date >= start_date) &
-    (df_active["timestamp"].dt.date <= end_date)
-]
+# Use ALL active symbols for ranking (already filtered by date range)
+ranking_df = df_active
 
 if not ranking_df.empty:
     mean_rates = (
@@ -333,14 +335,9 @@ if not filtered_df.empty:
 st.subheader("Risk-Return Profile")
 st.caption("Mean funding rate vs volatility — selected symbols highlighted")
 
-# Calculate stats for ALL active symbols in date range
-all_symbols_df = df_active[
-    (df_active["timestamp"].dt.date >= start_date) &
-    (df_active["timestamp"].dt.date <= end_date)
-]
-
-if not all_symbols_df.empty:
-    stats_df = all_symbols_df.groupby("symbol")["funding_rate"].agg(['mean', 'std']).reset_index()
+# Calculate stats for ALL active symbols (already filtered by date range)
+if not df_active.empty:
+    stats_df = df_active.groupby("symbol")["funding_rate"].agg(['mean', 'std']).reset_index()
     stats_df["mean_apr"] = stats_df["mean"] * 24 * 365 * 100
     stats_df["volatility_apr"] = stats_df["std"] * 24 * 365 * 100
     stats_df["selected"] = stats_df["symbol"].isin(selected_symbols)
