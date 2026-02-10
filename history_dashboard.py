@@ -43,21 +43,20 @@ if df.empty:
 # --- Sidebar Filters ---
 st.sidebar.header("Filters")
 
-from src.fetcher import get_top_symbols_by_volume
+# Calculate historical funding rate volatility for each symbol
+volatility = df.groupby("symbol")["funding_rate"].std().sort_values(ascending=False)
+available_symbols = volatility.index.tolist()
 
-# Get all symbols ranked by volume (most recent open interest)
-all_symbols_by_volume = get_top_symbols_by_volume(limit=500)
-available_symbols = [s for s in all_symbols_by_volume if s in df["symbol"].unique()]
-
-# Create display labels with volume rank
+# Create display labels with volatility rank
 symbol_labels = []
 for i, symbol in enumerate(available_symbols, 1):
+    vol_value = volatility[symbol] * 100  # Convert to percentage
     if i <= 15:
-        label = f"{symbol} (#{i} High Vol)"
+        label = f"{symbol} (#{i} High Volatility - {vol_value:.4f}%)"
     elif i >= len(available_symbols) - 14:
-        label = f"{symbol} (#{i} Low Vol)"
+        label = f"{symbol} (#{i} Low Volatility - {vol_value:.4f}%)"
     else:
-        label = f"{symbol} (#{i})"
+        label = f"{symbol} (#{i} - {vol_value:.4f}%)"
     symbol_labels.append(label)
 
 # Map labels back to symbols
@@ -71,7 +70,7 @@ if not default_selection:
 default_labels = [label for label, symbol in label_to_symbol.items() if symbol in default_selection[:5]]
 
 selected_labels = st.sidebar.multiselect(
-    "Select Symbols (ranked by current open interest)",
+    "Select Symbols (ranked by funding rate volatility)",
     options=symbol_labels,
     default=default_labels
 )
