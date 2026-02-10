@@ -43,8 +43,17 @@ if df.empty:
 # --- Sidebar Filters ---
 st.sidebar.header("Filters")
 
-# Calculate historical funding rate volatility for each symbol
-volatility = df.groupby("symbol")["funding_rate"].std().sort_values(ascending=False)
+# Filter out symbols with insufficient funding rate activity (< 50% non-zero)
+active_symbols = []
+for symbol in df["symbol"].unique():
+    sym_data = df[df["symbol"] == symbol]
+    pct_nonzero = (sym_data["funding_rate"] != 0).sum() / len(sym_data)
+    if pct_nonzero >= 0.5:  # At least 50% non-zero rates
+        active_symbols.append(symbol)
+
+# Calculate historical funding rate volatility for each active symbol
+df_active = df[df["symbol"].isin(active_symbols)]
+volatility = df_active.groupby("symbol")["funding_rate"].std().sort_values(ascending=False)
 available_symbols = volatility.index.tolist()
 
 # Create display labels with volatility rank
@@ -62,12 +71,8 @@ for i, symbol in enumerate(available_symbols, 1):
 # Map labels back to symbols
 label_to_symbol = {label: symbol for label, symbol in zip(symbol_labels, available_symbols)}
 
-default_selection = [s for s in DEFAULT_SYMBOLS if s in available_symbols]
-if not default_selection:
-    default_selection = available_symbols[:5]
-
-# Create default labels
-default_labels = [label for label, symbol in label_to_symbol.items() if symbol in default_selection[:5]]
+# Default to all symbols
+default_labels = symbol_labels
 
 selected_labels = st.sidebar.multiselect(
     "Select Symbols (ranked by funding rate volatility)",
@@ -95,11 +100,11 @@ else:
     start_date = date_range[0] if isinstance(date_range, (list, tuple)) else date_range
     end_date = max_date
 
-# Filter data
-filtered_df = df[
-    (df["symbol"].isin(selected_symbols)) &
-    (df["timestamp"].dt.date >= start_date) &
-    (df["timestamp"].dt.date <= end_date)
+# Filter data (use active symbols only)
+filtered_df = df_active[
+    (df_active["symbol"].isin(selected_symbols)) &
+    (df_active["timestamp"].dt.date >= start_date) &
+    (df_active["timestamp"].dt.date <= end_date)
 ]
 
 if not selected_symbols:
@@ -252,10 +257,10 @@ if not filtered_df.empty:
 st.subheader("Average Funding Rate Ranking")
 st.caption("Mean funding rate over the selected date range — top 20 and bottom 20.")
 
-# Use ALL symbols in the date range (not just selected) for ranking
-ranking_df = df[
-    (df["timestamp"].dt.date >= start_date) &
-    (df["timestamp"].dt.date <= end_date)
+# Use ALL active symbols in the date range (not just selected) for ranking
+ranking_df = df_active[
+    (df_active["timestamp"].dt.date >= start_date) &
+    (df_active["timestamp"].dt.date <= end_date)
 ]
 
 if not ranking_df.empty:
